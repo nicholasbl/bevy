@@ -30,6 +30,25 @@ use wgpu::{
     RequestAdapterOptions, Trace,
 };
 
+pub type PresentationHookFunction = fn();
+
+static PRESENTATION_HOOK: std::sync::RwLock<Option<PresentationHookFunction>> =
+    std::sync::RwLock::new(None);
+
+pub fn install_presentation_hook(function: PresentationHookFunction) {
+    let mut lock = PRESENTATION_HOOK.write().unwrap();
+    *lock = Some(function);
+}
+
+#[inline]
+fn run_presentation_hook() {
+    let func = PRESENTATION_HOOK.read().unwrap();
+
+    if let Some(func) = *func {
+        func();
+    }
+}
+
 /// Updates the [`RenderGraph`] with all of its nodes and then runs it to render the entire frame.
 pub fn render_system(
     world: &mut World,
@@ -81,6 +100,8 @@ pub fn render_system(
 
     {
         let _span = info_span!("present_frames").entered();
+
+        run_presentation_hook();
 
         world.resource_scope(|world, mut windows: Mut<ExtractedWindows>| {
             let views = state.get(world);
